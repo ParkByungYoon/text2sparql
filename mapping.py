@@ -22,7 +22,7 @@ class ResourceMapper:
 
 
     def process(self, user_input=None):
-        query_terms = self.lemmatize_query(user_input)
+        query_terms = self.tokenize_query(user_input)
         query_patitions = self.partition_query(query_terms)
         p_star,_ = self.score_partition(query_patitions)
         resource_combinations = self.combinate_resource(p_star)

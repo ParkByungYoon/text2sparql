@@ -18,41 +18,72 @@ class ConceptualGraphGenerator:
         return result['hits']['hits'][0]['_source']['Type']
         
 
-    def generate_conceptual_graph(self, resource_combinations):
+    def generate_all_conceptual_graph(self, resource_combinations):
         conceptual_graph = []
-
         for rc in resource_combinations:
-            conceptual_arc = []
-            state_list = []
-            rc = list(rc)
-
-            for r in rc:
-                r_type = self.get_type(r)
-                if r_type in ['T_dp', 'T_op']:
-                    state_list.append('edge') 
-                else:
-                    state_list.append('vertex') 
-
-            # 마지막이 edge일 때
-            if state_list[-1] == 'edge':
-                state_list.append('vertex')
+            # rightmost element is an edge
+            if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
+                rc = list(rc)
                 rc.append('owl:Thing')
 
-            # vertex - vertex 일때
-            index_list = []
-            for i in range(len(state_list)-1):
-                if state_list[i] == 'vertex' and state_list[i+1] == 'vertex':
-                    index_list.append(i+1)
+            conceptual_arc_list = []
+
+
+            for i in range(len(rc)-1):
+                conceptual_arc = []
+                s_type = self.get_type(rc[i])
+
+                if s_type in ['T_dp', 'T_op']:
+                    continue
+                
+                p_list = []
+                for j in range(i+1, len(rc)):
+                    o_type = self.get_type(rc[j])
+                    if o_type in ['T_dp', 'T_op']:
+                        p_list.append(rc[j])
+                    elif s_type == 'T_i' and o_type == 'T_i':
+                        continue
+                    else:
+                        if len(p_list) == 0:
+                            conceptual_arc.append((rc[i],'Any P',rc[j]))
+                        else:
+                            for p in p_list:
+                                conceptual_arc.append((rc[i], p, rc[j]))
+                conceptual_arc_list.append(conceptual_arc)
             
-            for i in index_list:
-                state_list.insert(i, 'edge')
-                rc.insert(i, 'Any P')
-            
-            for offset in range(0,len(rc)-2, 2):
-                conceptual_arc.append(tuple(rc[offset:offset+3]))
-            
-            conceptual_graph.append(conceptual_arc)
+            for cg in list(itertools.product(*conceptual_arc_list)):
+                conceptual_graph.append(list(cg))
         
+        return conceptual_graph
+    
+
+    def generate_conceptual_graph(self, resource_combination):
+        conceptual_graph = []
+        for rc in resource_combination:
+            # rightmost element is an edge
+            if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
+                rc = list(rc)
+                rc.append('owl:Thing')
+                
+            conceptual_arc = []
+            for i in range(len(rc)-1):
+                s_type = self.get_type(rc[i])
+
+                if s_type in ['T_dp', 'T_op']:
+                    continue
+                
+                p = 'Any P'
+                for j in range(i+1, len(rc)):
+                    o_type = self.get_type(rc[j])
+                    if o_type in ['T_dp', 'T_op']:
+                        p = rc[j]
+                    elif s_type == 'T_i' and o_type == 'T_i':
+                        break
+                    else:
+                        conceptual_arc.append((rc[i],p,rc[j]))
+                        break
+            conceptual_graph.append(conceptual_arc)
+
         return conceptual_graph
 
 
@@ -76,11 +107,11 @@ class QueryGraphGenerator:
         return result['hits']['hits'][0]['_source']['Tbox']
 
 
-    def search_at_tbox_level(self, conceptual_graph):
+    def search_at_tbox_level(self, conceptual_graph, weight=True):
         ca2sp = {}
 
         for cg in conceptual_graph:
-        
+
             for ca in cg:
                 if ca in ca2sp: 
                     continue
@@ -101,18 +132,37 @@ class QueryGraphGenerator:
 
                 # Find shortest path
                 for u,e,v in itertools.product(d,p,r):
+                    
                     if e == 'Any P': e=None
 
-                    score, result = find_shortest_path(self.G, u, v, e, n_triple=4, weight=True) 
+                    forward_result = find_shortest_path(self.G, u, v, e, weight=weight)
+                    backward_result = find_shortest_path(self.G, v, u, e, weight=weight)
+
+                    if forward_result[0] <= backward_result[0]:
+                        score, result = forward_result
+                        abox = ca[0], ca[-1]
+                    else:
+                        score, result = backward_result
+                        abox = ca[-1], ca[0]
+
                     if len(result) == 0: continue
+
+                    # 앞이 instance일 경우
+                    if result[0][0] != abox[0]:
+                        result[0] = (result[0][0] + '('+abox[0]+')', result[0][1], result[0][2])
+                    
+                    # 뒤가 instance일 경우
+                    if result[-1][-1] != abox[1]:
+                        result[-1] = (result[-1][0], result[-1][1], result[-1][2] + '('+abox[1]+')')
+                    
                     ca2sp[ca].append((score,result))
         
         return ca2sp
 
 
-    def generate_query_graph(self, conceptual_graph):
+    def generate_query_graph(self, conceptual_graph, weight=True):
 
-        ca2sp = self.search_at_tbox_level(conceptual_graph)
+        ca2sp = self.search_at_tbox_level(conceptual_graph, weight)
         query_graph = []
 
         for cg in conceptual_graph:
@@ -125,9 +175,8 @@ class QueryGraphGenerator:
                 for arc_score, sp in qg:
                     query_graph_score += arc_score
                     sp_list.append(sp)
+                sp_list = sum(sp_list, list())
                 query_graph.append((query_graph_score, sp_list))
-
-        query_graph = self.merge_subclass(query_graph)
 
         return query_graph
     
@@ -139,9 +188,10 @@ class QueryGraphGenerator:
                 new_query_graph.append((score/len(qg),qg))
                 continue
             
+            new_score = score
+            
             if qg[-1][-1][1] == 'rdfs:subClassOf':
                 new_qg = []
-                new_score = score
                 terminated = False
 
                 for sp in qg[::-1]:

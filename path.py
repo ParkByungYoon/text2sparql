@@ -4,7 +4,7 @@ import networkx as nx
 
 
 def generate_graph(unit_path):
-    G = nx.MultiGraph()
+    G = nx.MultiDiGraph()
 
     for _, row in unit_path.iterrows():
         source = row['domain']  
@@ -26,14 +26,13 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None, weight=Fal
     c = itertools.count()
     fringe = []
     path = [source]
-    result = []
-    global_dist = float('inf')
+    result = (float('inf'), [])
 
     if n_triple is None:
         n_triple = len(G.nodes)
 
     if source == target:
-        return result
+        raise ValueError(f"source({source}) and target({target}) are the same")
     
     push(fringe, (0, next(c), source, path))
 
@@ -44,11 +43,9 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None, weight=Fal
             continue
     
         if target == path[-1]:
-            if d > global_dist:
-                continue
             if p_name is None or p_name in path:
-                result.append((d,path))
-                global_dist = d
+                result = (d,path)
+                break
             continue
         
 
@@ -60,21 +57,15 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None, weight=Fal
                 else: cost = 1
                 vu_dist = d + cost
 
-                if vu_dist > global_dist:
-                    continue
-
                 new_path = list()
                 new_path += path
                 new_path += [e['property'], u]
 
                 push(fringe, (vu_dist, next(c), u, new_path))
 
-    if len(result) == 0:
+    if len(result[1]) == 0:
         return result
-    
-    # return result
 
-    score = sorted(result)[0][0]
-    shortest_path = sorted(result)[0][1]
+    score, shortest_path = result
     shortest_path = [tuple(shortest_path[offset:offset+3]) for offset in range(0, len(shortest_path)-2, 2)]
     return score, shortest_path
