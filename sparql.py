@@ -16,7 +16,7 @@ class SPAQLConverter:
 
     
     def select_query_graph(self, query_graph):
-        final_query_graph = sorted(query_graph, key=lambda x: (x[0], len(x[1])))[0][1]
+        final_query_graph = sorted(query_graph, key=lambda x: (-x[0], len(x[1])))[0][1]
 
         return final_query_graph
     

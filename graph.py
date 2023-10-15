@@ -173,7 +173,7 @@ class QueryGraphGenerator:
                 sp_list = []
                 query_graph_score = 0
                 for arc_score, sp in qg:
-                    query_graph_score += arc_score
+                    query_graph_score += (1-arc_score)
                     sp_list.append(sp)
                 sp_list = sum(sp_list, list())
                 query_graph.append((query_graph_score, sp_list))
