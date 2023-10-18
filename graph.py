@@ -16,18 +16,17 @@ class ConceptualGraphGenerator:
         search_query = {"query":{"term":{"URI.keyword": resource}}}
         result = self.es.search(index=self.index_name, body=search_query)
         return result['hits']['hits'][0]['_source']['Type']
-        
-
-    def generate_all_conceptual_graph(self, resource_combinations):
+    
+    def generate_conceptual_graph(self, resource_combinations):
         conceptual_graph = []
+
         for rc in resource_combinations:
             # rightmost element is an edge
             if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
                 rc = list(rc)
                 rc.append('owl:Thing')
 
-            conceptual_arc_list = []
-
+            ca_list = []
 
             for i in range(len(rc)-1):
                 conceptual_arc = []
@@ -35,54 +34,64 @@ class ConceptualGraphGenerator:
 
                 if s_type in ['T_dp', 'T_op']:
                     continue
-                
-                p_list = []
+
                 for j in range(i+1, len(rc)):
                     o_type = self.get_type(rc[j])
                     if o_type in ['T_dp', 'T_op']:
-                        p_list.append(rc[j])
-                    elif s_type == 'T_i' and o_type == 'T_i':
-                        continue
+
+                        for k in range(j+1, len(rc)):
+                            o_type = self.get_type(rc[k])
+
+                            if s_type == 'T_i' and o_type == 'T_i':
+                                continue
+                            if o_type in ['T_dp', 'T_op']:
+                                continue
+
+                            conceptual_arc.append((rc[i], rc[j], rc[k]))
+
+                    elif s_type == 'T_i' and o_type == 'T_i': continue
                     else:
-                        if len(p_list) == 0:
-                            conceptual_arc.append((rc[i],'Any P',rc[j]))
-                        else:
-                            for p in p_list:
-                                conceptual_arc.append((rc[i], p, rc[j]))
-                conceptual_arc_list.append(conceptual_arc)
+                        conceptual_arc.append((rc[i],'Any P',rc[j]))
             
-            for cg in list(itertools.product(*conceptual_arc_list)):
-                conceptual_graph.append(list(cg))
-        
+                ca_list.append(conceptual_arc)
+            
+            cg_list = self.drop_crossed_conceputal_graph(rc, ca_list)
+            conceptual_graph.extend(cg_list)
+
         return conceptual_graph
+
     
 
-    def generate_conceptual_graph(self, resource_combination):
+    def drop_crossed_conceputal_graph(self, resource_combination, conceptual_arc_list):
+        # check-cross
+        rc_len = len(resource_combination)
         conceptual_graph = []
-        for rc in resource_combination:
-            # rightmost element is an edge
-            if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
-                rc = list(rc)
-                rc.append('owl:Thing')
-                
-            conceptual_arc = []
-            for i in range(len(rc)-1):
-                s_type = self.get_type(rc[i])
+        cross_list = [(i, j, k, l) for i in range(rc_len) for j in range(i+2, rc_len-1) for k in range(i+1,j) for l in range(j+1, rc_len)]
 
-                if s_type in ['T_dp', 'T_op']:
-                    continue
+        for cg in list(itertools.product(*conceptual_arc_list)):
+            ca_str_list = [''.join(ca).replace('Any P','') for ca in cg]
+
+            for i,j,k,l in cross_list:
+                rc_ij = ''.join((resource_combination[i], resource_combination[j]))
+                rc_kl = ''.join((resource_combination[k], resource_combination[l]))
                 
-                p = 'Any P'
-                for j in range(i+1, len(rc)):
-                    o_type = self.get_type(rc[j])
-                    if o_type in ['T_dp', 'T_op']:
-                        p = rc[j]
-                    elif s_type == 'T_i' and o_type == 'T_i':
+                crossed = False
+                for ca_str in ca_str_list:
+                    if rc_ij in ca_str:
+                        crossed = True
                         break
-                    else:
-                        conceptual_arc.append((rc[i],p,rc[j]))
-                        break
-            conceptual_graph.append(conceptual_arc)
+                
+                if crossed:
+                    crossed = False
+                    for ca_str in ca_str_list:
+                        if rc_kl in ca_str:
+                            crossed = True
+                            break
+                
+                if crossed: break
+
+            if not crossed:
+                conceptual_graph.append(list(cg))
 
         return conceptual_graph
 
@@ -107,7 +116,7 @@ class QueryGraphGenerator:
         return result['hits']['hits'][0]['_source']['Tbox']
 
 
-    def search_at_tbox_level(self, conceptual_graph, weight=True):
+    def search_at_tbox_level(self, conceptual_graph):
         ca2sp = {}
 
         for cg in conceptual_graph:
@@ -135,34 +144,36 @@ class QueryGraphGenerator:
                     
                     if e == 'Any P': e=None
 
-                    forward_result = find_shortest_path(self.G, u, v, e, weight=weight)
-                    backward_result = find_shortest_path(self.G, v, u, e, weight=weight)
+                    forward_result = find_shortest_path(self.G, u, v, e)
+                    backward_result = find_shortest_path(self.G, v, u, e)
 
                     if forward_result[0] <= backward_result[0]:
-                        score, result = forward_result
+                        _, result = forward_result
                         abox = ca[0], ca[-1]
                     else:
-                        score, result = backward_result
+                        _, result = backward_result
                         abox = ca[-1], ca[0]
 
                     if len(result) == 0: continue
 
-                    # 앞이 instance일 경우
-                    if result[0][0] != abox[0]:
-                        result[0] = (result[0][0] + '('+abox[0]+')', result[0][1], result[0][2])
-                    
-                    # 뒤가 instance일 경우
-                    if result[-1][-1] != abox[1]:
-                        result[-1] = (result[-1][0], result[-1][1], result[-1][2] + '('+abox[1]+')')
-                    
-                    ca2sp[ca].append((score,result))
+                    for score, path in result:
+
+                        # 앞이 instance일 경우
+                        if path[0][0] != abox[0]:
+                            path[0] = (path[0][0] + '('+abox[0]+')', path[0][1], path[0][2])
+                        
+                        # 뒤가 instance일 경우
+                        if path[-1][-1] != abox[1]:
+                            path[-1] = (path[-1][0], path[-1][1], path[-1][2] + '('+abox[1]+')')
+                        
+                        ca2sp[ca].append((score,path))
         
         return ca2sp
 
 
-    def generate_query_graph(self, conceptual_graph, weight=True):
+    def generate_query_graph(self, conceptual_graph):
 
-        ca2sp = self.search_at_tbox_level(conceptual_graph, weight)
+        ca2sp = self.search_at_tbox_level(conceptual_graph)
         query_graph = []
 
         for cg in conceptual_graph:
@@ -176,7 +187,7 @@ class QueryGraphGenerator:
                     query_graph_score += (1-arc_score)
                     sp_list.append(sp)
                 sp_list = sum(sp_list, list())
-                query_graph.append((query_graph_score, sp_list))
+                query_graph.append((query_graph_score/len(sp_list), sp_list))
 
         return query_graph
     
