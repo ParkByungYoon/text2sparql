@@ -19,14 +19,15 @@ def generate_graph(unit_path):
     return G
 
 
-def find_shortest_path(G, source, target, p_name=None, n_triple=None, weight=False):
+def find_shortest_path(G, source, target, p_name=None, n_triple=None):
     push = heappush
     pop = heappop
     
     c = itertools.count()
     fringe = []
     path = [source]
-    result = (float('inf'), [])
+    min_len = float('inf')
+    result = []
 
     if n_triple is None:
         n_triple = len(G.nodes)
@@ -34,38 +35,38 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None, weight=Fal
     if source == target:
         raise ValueError(f"source({source}) and target({target}) are the same")
     
-    push(fringe, (0, next(c), source, path))
+    push(fringe, (0, next(c), source, path, 0))
 
     while fringe:
-        (d, loop, v, path) = pop(fringe)
+        (d, loop, v, path, g_score) = pop(fringe)
 
         if len(path)//2 >= n_triple:
             continue
     
         if target == path[-1]:
-            if p_name is None or p_name in path:
-                result = (d,path)
+            if d > min_len: 
                 break
+            if p_name is None or p_name in path:
+                result.append((g_score, path))
+                min_len = d
             continue
-        
+
+        if d == min_len:
+            continue
 
         for u, edges in G._adj[v].items():
             if u in path:
                 continue
             for _, e in edges.items():
-                if weight: cost = e['weight'] 
-                else: cost = 1
-                vu_dist = d + cost
 
                 new_path = list()
                 new_path += path
                 new_path += [e['property'], u]
 
-                push(fringe, (vu_dist, next(c), u, new_path))
+                push(fringe, (d+1, next(c), u, new_path, g_score + e['weight']))
 
-    if len(result[1]) == 0:
-        return result
+    if len(result) == 0:
+        return min_len, result
 
-    score, shortest_path = result
-    shortest_path = [tuple(shortest_path[offset:offset+3]) for offset in range(0, len(shortest_path)-2, 2)]
-    return score, shortest_path
+    result = [(g, [tuple(r[offset:offset+3]) for offset in range(0, len(r)-2, 2)]) for (g, r) in result]
+    return min_len, result
