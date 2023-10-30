@@ -16,8 +16,48 @@ class ConceptualGraphGenerator:
         search_query = {"query":{"term":{"URI.keyword": resource}}}
         result = self.es.search(index=self.index_name, body=search_query)
         return result['hits']['hits'][0]['_source']['Type']
-    
+
+
     def generate_conceptual_graph(self, resource_combinations):
+        conceptual_graph = []
+        for rc in resource_combinations:
+            # rightmost element is an edge
+            if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
+                rc = list(rc)
+                rc.append('owl:Thing')
+
+            conceptual_arc_list = []
+
+
+            for i in range(len(rc)-1):
+                conceptual_arc = []
+                s_type = self.get_type(rc[i])
+
+                if s_type in ['T_dp', 'T_op']:
+                    continue
+                
+                p_list = []
+                for j in range(i+1, len(rc)):
+                    o_type = self.get_type(rc[j])
+                    if o_type in ['T_dp', 'T_op']:
+                        p_list.append(rc[j])
+                    # elif s_type == 'T_i' and o_type == 'T_i':
+                    #     continue
+                    else:
+                        if len(p_list) == 0:
+                            conceptual_arc.append((rc[i],'Any P',rc[j]))
+                        else:
+                            for p in p_list:
+                                conceptual_arc.append((rc[i], p, rc[j]))
+                conceptual_arc_list.append(conceptual_arc)
+            
+            for cg in list(itertools.product(*conceptual_arc_list)):
+                conceptual_graph.append(list(cg))
+        
+        return conceptual_graph
+    
+
+    def generate_all_conceptual_graph(self, resource_combinations):
         conceptual_graph = []
 
         for rc in resource_combinations:
