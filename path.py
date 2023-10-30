@@ -33,7 +33,8 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None):
         n_triple = len(G.nodes)
 
     if source == target:
-        raise ValueError(f"source({source}) and target({target}) are the same")
+        return min_len, result 
+        # raise ValueError(f"source({source}) and target({target}) are the same")
     
     push(fringe, (0, next(c), source, path, 0))
 
