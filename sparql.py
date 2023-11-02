@@ -14,9 +14,18 @@ class SPAQLConverter:
         SCHEMA = rdflib.Namespace("http://schema.org/")
         self.g.bind("schema", SCHEMA)
 
+
+    def process(self, query_graph):
+        final_query_graph = self.select_query_graph(query_graph) 
+        relation_triples = self.extract_relation_triples(final_query_graph)
+        knows_query = self.generate_query(relation_triples)
+        result = self.excute_query(knows_query)
+
+        return result
+
     
     def select_query_graph(self, query_graph):
-        final_query_graph = sorted(query_graph, key=lambda x: (-x[0], len(x[1])))[0][1]
+        final_query_graph = sorted(query_graph, key=lambda x: (len(x[1]), -x[0]))[0][1]
 
         return final_query_graph
     
@@ -32,22 +41,21 @@ class SPAQLConverter:
         return relation_triples
 
     
-    def generate_query(self, query_graph):
-        final_query_graph = self.select_query_graph(query_graph) 
-        relation_triples = self.extract_relation_triples(final_query_graph)
-
+    def generate_query(self, relation_triples):
+        target = self.set_target(relation_triples)
         knows_query = "SELECT DISTINCT ?target \nWHERE\n"
         prev_s = ''
-        var_dict = {relation_triples[-1][-1]:'?target'}
+        var_dict = {target:'?target'}
         c = itertools.count()
 
         knows_query += '{'
 
 
         for s,p,o in relation_triples:
-            # if p == 'rdfs:subClassOf':
-            #     continue
-            
+            # domain, range 모두 instance 일때
+            if s[-1] == ')' and o[-1] == ')':
+                continue
+
             # domain이 instance 일때
             if s[-1] == ')':
                 s_var = s[:-1].split('(')[-1]
@@ -87,3 +95,12 @@ class SPAQLConverter:
 
     def excute_query(self, knows_query):
         return self.g.query(knows_query)
+    
+
+    def set_target(self, relation_triples):
+        if relation_triples[-1][-1][-1] == ')':
+            target = relation_triples[-1][0]
+        else:
+            target = relation_triples[-1][-1]
+        
+        return target
