@@ -19,7 +19,7 @@ def generate_graph(unit_path):
     return G
 
 
-def find_shortest_path(G, source, target, p_name=None, n_triple=None):
+def find_shortest_path(G, source, target, p_name=None, n_triple=None, weight=False):
     push = heappush
     pop = heappop
     
@@ -33,8 +33,7 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None):
         n_triple = len(G.nodes)
 
     if source == target:
-        return min_len, result 
-        # raise ValueError(f"source({source}) and target({target}) are the same")
+        return min_len, result
     
     push(fringe, (0, next(c), source, path, 0))
 
@@ -59,12 +58,15 @@ def find_shortest_path(G, source, target, p_name=None, n_triple=None):
             if u in path:
                 continue
             for _, e in edges.items():
+                
+                if weight: cost = e['weight']
+                else: cost = 1
 
                 new_path = list()
                 new_path += path
                 new_path += [e['property'], u]
 
-                push(fringe, (d+1, next(c), u, new_path, g_score + e['weight']))
+                push(fringe, (d+cost, next(c), u, new_path, g_score + e['weight']))
 
     if len(result) == 0:
         return min_len, result
