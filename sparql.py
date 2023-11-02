@@ -20,8 +20,7 @@ class SPAQLConverter:
         relation_triples = self.extract_relation_triples(final_query_graph)
         knows_query = self.generate_query(relation_triples)
         result = self.excute_query(knows_query)
-
-        return result
+        self.print_result(result)
 
     
     def select_query_graph(self, query_graph):
@@ -104,3 +103,7 @@ class SPAQLConverter:
             target = relation_triples[-1][-1]
         
         return target
+    
+    def print_result(self, result):
+        for r in result:
+            print(r['target'].rsplit('/')[-1], end='  ')
