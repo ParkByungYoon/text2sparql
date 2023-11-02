@@ -21,9 +21,14 @@ class ConceptualGraphGenerator:
     def generate_conceptual_graph(self, resource_combinations):
         conceptual_graph = []
         for rc in resource_combinations:
+            rc = list(rc)
+            
+            # leftmost elemnet is an edge
+            if self.get_type(rc[0]) in ['T_dp', 'T_op']:
+                rc[0], rc[1] = rc[1], rc[0]
+            
             # rightmost element is an edge
             if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
-                rc = list(rc)
                 rc.append('owl:Thing')
 
             conceptual_arc_list = []
@@ -61,9 +66,14 @@ class ConceptualGraphGenerator:
         conceptual_graph = []
 
         for rc in resource_combinations:
+            rc = list(rc)
+            
+            # leftmost elemnet is an edge
+            if self.get_type(rc[0]) in ['T_dp', 'T_op']:
+                rc[0], rc[1] = rc[1], rc[0]
+
             # rightmost element is an edge
             if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
-                rc = list(rc)
                 rc.append('owl:Thing')
 
             ca_list = []
@@ -207,6 +217,22 @@ class QueryGraphGenerator:
                             path[-1] = (path[-1][0], path[-1][1], path[-1][2] + '('+abox[1]+')')
                         
                         ca2sp[ca].append((score,path))
+                    
+                    if forward_result[0] == backward_result[0]:
+                        _, result = backward_result
+                        abox = ca[-1], ca[0]
+                        
+                        for score, path in result:
+                            # 앞이 instance일 경우
+                            if path[0][0] != abox[0]:
+                                path[0] = (path[0][0] + '('+abox[0]+')', path[0][1], path[0][2])
+                            
+                            # 뒤가 instance일 경우
+                            if path[-1][-1] != abox[1]:
+                                path[-1] = (path[-1][0], path[-1][1], path[-1][2] + '('+abox[1]+')')
+                            
+                            ca2sp[ca].append((score,path))
+                    
         
         return ca2sp
 
