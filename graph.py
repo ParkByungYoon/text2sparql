@@ -16,7 +16,11 @@ class ConceptualGraphGenerator:
         search_query = {"query":{"term":{"URI.keyword": resource}}}
         result = self.es.search(index=self.index_name, body=search_query)
         return result['hits']['hits'][0]['_source']['Type']
+    
+    def process(self, resource_combinations):
+        conceptual_graph = self.generate_conceptual_graph(resource_combinations)
 
+        return conceptual_graph
 
     def generate_conceptual_graph(self, resource_combinations):
         conceptual_graph = []
@@ -158,6 +162,13 @@ class QueryGraphGenerator:
         # Unit Path
         unit_path = pd.read_csv(config['unitpath']['path'])
         self.G = generate_graph(unit_path)
+    
+
+    def process(self, conceptual_graph):
+        shortest_path_dict = self.search_at_tbox_level(conceptual_graph)
+        query_graph = self.generate_query_graph(conceptual_graph, shortest_path_dict)
+
+        return query_graph
 
 
     def get_tbox(self, resource):
@@ -167,15 +178,15 @@ class QueryGraphGenerator:
 
 
     def search_at_tbox_level(self, conceptual_graph):
-        ca2sp = {}
+        shortest_path_dict = {}
 
         for cg in conceptual_graph:
 
             for ca in cg:
-                if ca in ca2sp: 
+                if ca in shortest_path_dict: 
                     continue
 
-                ca2sp[ca] = []
+                shortest_path_dict[ca] = []
                 d,p,r = ca
 
                 # Restict search space to Tbox level
@@ -216,7 +227,7 @@ class QueryGraphGenerator:
                         if path[-1][-1] != abox[1]:
                             path[-1] = (path[-1][0], path[-1][1], path[-1][2] + '('+abox[1]+')')
                         
-                        ca2sp[ca].append((score,path))
+                        shortest_path_dict[ca].append((score,path))
                     
                     if forward_result[0] == backward_result[0]:
                         _, result = backward_result
@@ -231,21 +242,19 @@ class QueryGraphGenerator:
                             if path[-1][-1] != abox[1]:
                                 path[-1] = (path[-1][0], path[-1][1], path[-1][2] + '('+abox[1]+')')
                             
-                            ca2sp[ca].append((score,path))
+                            shortest_path_dict[ca].append((score,path))
                     
         
-        return ca2sp
+        return shortest_path_dict
 
 
-    def generate_query_graph(self, conceptual_graph):
-
-        ca2sp = self.search_at_tbox_level(conceptual_graph)
+    def generate_query_graph(self, conceptual_graph, shortest_path_dict):
         query_graph = []
 
         for cg in conceptual_graph:
             query_graph_candidates = []
             for ca in cg:
-                query_graph_candidates.append(ca2sp[ca])    
+                query_graph_candidates.append(shortest_path_dict[ca])    
             for qg in itertools.product(*query_graph_candidates):
                 sp_list = []
                 query_graph_score = 0
