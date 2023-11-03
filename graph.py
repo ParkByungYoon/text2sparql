@@ -29,7 +29,8 @@ class ConceptualGraphGenerator:
             
             # leftmost elemnet is an edge
             if self.get_type(rc[0]) in ['T_dp', 'T_op']:
-                rc[0], rc[1] = rc[1], rc[0]
+                # rc[0], rc[1] = rc[1], rc[0]
+                rc.insert(0, 'owl:Thing')
             
             # rightmost element is an edge
             if self.get_type(rc[-1]) in ['T_dp', 'T_op']:
