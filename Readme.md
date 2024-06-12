@@ -7,3 +7,5 @@ Please use below command to create config file
 python setting.py --owl_path [data_path] --server_ip [ip] --index_name [index]
 
 ![Untitled](/assets/그림1.png)
+
+![Untitled](/assets/그림2.png)
