@@ -18,7 +18,6 @@ def config_generator(args):
 def config_read(file_path = ''):
     config = configparser.ConfigParser()    
     config.read(file_path+'config.ini', encoding='utf-8') 
-
     return config
 
 if __name__ == '__main__':

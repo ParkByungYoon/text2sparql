@@ -9,7 +9,7 @@ def generate_graph(unit_path):
     for _, row in unit_path.iterrows():
         source = row['domain']  
         target = row['range']   
-        edge = row['P']         
+        edge = row['p']         
         weight = row['W']       
 
         G.add_node(source)
